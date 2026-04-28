@@ -48,6 +48,15 @@ class AddWordResponse(BaseModel):
     source: str
 
 
+class WordResponse(BaseModel):
+    """Response payload representing a word resource."""
+
+    word_id: int
+    word: str
+    frequency: int
+    source: str
+
+
 class CandidateResponse(BaseModel):
     """API response model for a single candidate word."""
 
@@ -248,6 +257,31 @@ def predict_by_text(text: str, request: Request) -> PredictionResponse:
     return PredictionResponse(
         query=text,
         candidates=_candidates_to_response(candidates),
+    )
+
+
+@app.get('/words/{word_id}', response_model=WordResponse)
+def get_word(word_id: int, request: Request) -> WordResponse:
+    """Retrieve a word resource by identifier."""
+    service = _get_service(request)
+
+    try:
+        record = service.get_word(WordId(word_id))
+
+        if record is None:
+            raise HTTPException(status_code=404, detail='Word not found')
+
+    except (TypeError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    except WordPredictionServiceError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+    return WordResponse(
+        word_id=record.word_id.value,
+        word=record.word,
+        frequency=record.frequency,
+        source=record.source,
     )
 
 

@@ -282,31 +282,21 @@ class WordPredictionService:
 
             raise WordPredictionServiceError(f'Failed to synchronize runtime state updating {record.word!r}') from e
 
-    def get_word(self, word_id: WordId) -> Word | None:
+    def get_word(self, word_id: WordId) -> WordRecord | None:
         """
-        Return the word associated with a given WordId from the in-memory store.
+        Return the word record associated with a given WordId from the in-memory store.
 
         This is a query operation and does not modify system state. The method reads
-        exclusively from the in-memory WordStore and does not query the underlying
-        repository. As such, results reflect the current hydrated runtime state.
-
-        Args:
-        - word_id: Identifier of the word to retrieve.
-
-        Returns:
-        - Word | None: The word if present in the runtime store, or None if not found.
-
-        Raises:
-        - WordPredictionServiceError: If the service has not been hydrated and cannot
-        safely access runtime state, or if an internal runtime state inconsistency is
-        detected. In such cases the service is marked as not hydrated and must be
-        rehydrated before further use.
+        exclusively from the hydrated in-memory WordStore and does not query the
+        repository.
         """
         self._ensure_hydrated()
+
         if word_id not in self._word_store:
             return None
+
         try:
-            return self._word_store.get_word(word_id)
+            return self._word_store.get_record(word_id)
         except WordStoreError as e:
             self._is_hydrated = False
             raise WordPredictionServiceError(
