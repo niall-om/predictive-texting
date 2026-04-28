@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import cast
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from predictive_texting.application.word_prediction.config import RankingPolicyType, WordPredictionConfig
@@ -179,6 +180,111 @@ def _candidates_to_response(candidates: list[CandidateWord]) -> list[CandidateRe
 # -----------------------------------------------------------------------------
 # Routes
 # -----------------------------------------------------------------------------
+
+
+@app.get('/', response_class=HTMLResponse)
+def demo_ui() -> HTMLResponse:
+    return HTMLResponse("""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Predictive Text Demo</title>
+                <style>
+                    body { font-family: Arial; max-width: 600px; margin: 40px auto; }
+                    textarea { width: 100%; height: 120px; font-size: 16px; }
+                    .suggestion { cursor: pointer; padding: 4px; }
+                    .suggestion:hover { background-color: #eee; }
+                </style>
+            </head>
+            <body>
+
+            <h2>Predictive Text Demo</h2>
+
+            <textarea id="editor" placeholder="Start typing..."></textarea>
+
+            <h4>Suggestions</h4>
+            <div id="suggestions"></div>
+
+            <script>
+            const editor = document.getElementById("editor");
+            const suggestionsDiv = document.getElementById("suggestions");
+
+            let timeout = null;
+
+            editor.addEventListener("input", () => {
+                clearTimeout(timeout);
+                timeout = setTimeout(fetchSuggestions, 200);
+            });
+
+            function getCurrentWord() {
+                const text = editor.value;
+                const cursor = editor.selectionStart;
+
+                const before = text.slice(0, cursor);
+                const match = before.match(/([a-zA-Z]+)$/);
+
+                return match ? match[1] : "";
+            }
+
+            async function fetchSuggestions() {
+                const word = getCurrentWord();
+
+                if (!word) {
+                    suggestionsDiv.innerHTML = "";
+                    return;
+                }
+
+                const res = await fetch(`/predict/text?text=${word}`);
+                const data = await res.json();
+
+                suggestionsDiv.innerHTML = "";
+
+                data.candidates.forEach(c => {
+                    const div = document.createElement("div");
+                    div.className = "suggestion";
+                    div.textContent = c.word;
+
+                    div.onclick = () => applySuggestion(c);
+
+                    suggestionsDiv.appendChild(div);
+                });
+            }
+
+            async function applySuggestion(candidate) {
+                const text = editor.value;
+                const cursor = editor.selectionStart;
+
+                const before = text.slice(0, cursor);
+                const after = text.slice(cursor);
+
+                const match = before.match(/([a-zA-Z]+)$/);
+                if (!match) return;
+
+                const wordStart = cursor - match[1].length;
+
+                const newText =
+                    text.slice(0, wordStart) +
+                    candidate.word +
+                    after;
+
+                editor.value = newText;
+
+                // move cursor to end of inserted word
+                const newCursor = wordStart + candidate.word.length;
+                editor.setSelectionRange(newCursor, newCursor);
+
+                // notify backend (personalization)
+                await fetch(`/words/${candidate.word_id}/select`, {
+                    method: "POST"
+                });
+
+                fetchSuggestions();
+            }
+            </script>
+
+            </body>
+            </html>
+                """)
 
 
 @app.get('/health', response_model=HealthResponse)
