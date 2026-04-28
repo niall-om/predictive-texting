@@ -65,7 +65,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     Code after `yield` would run once at application shutdown.
     """
-    # startup code
+
+    # Note:
+    # FastAPI uses an async context manager for application lifecycle.
+    # The code before yield runs at startup to initialise shared state, and the code after yield runs at shutdown.
+    # Used to bootstrap and store the prediction service once per process.
+    # Enables pattern: Initialize once → reuse across requests
+
+    # startup code: build word prediction service and shared in-memory data structures
     try:
         app.state.word_prediction_service = bootstrap_word_prediction_service(_build_config())
     except BootstrapError as e:
