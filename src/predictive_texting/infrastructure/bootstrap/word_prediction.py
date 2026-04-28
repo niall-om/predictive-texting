@@ -9,40 +9,79 @@
 
 from __future__ import annotations
 
-import sqlite3
-from pathlib import Path
-
 from ...application.word_prediction.config import WordPredictionConfig
+from ...application.word_prediction.service import WordPredictionService
+from ...domain.encoding.encoding_specs import get_encoding_spec
+from ...domain.encoding.key_encoder import KeyEncoder
+from ...domain.lexicon.completion_index import RankedCompletionIndex
+from ...domain.lexicon.types import NewWord, WordSource
+from ...domain.lexicon.word_store import InMemoryWordStore
+from ...exceptions.application import WordPredictionConfigError, WordPredictionServiceError
+from ...exceptions.domain import EncodingError
+from ...exceptions.infrastructure import BootstrapError, RepositoryError
+from ...infrastructure.repositories.sqlite_word_repository import SqliteWordRepository
+from .database import bootstrap_sqlite_database
+from .db.seed_file_registry import load_seed_words
 
-# from ..db.seed_registry import load_seed_words
 
+def bootstrap_word_prediction_service(config: WordPredictionConfig) -> WordPredictionService:
+    """
+    Build, seed, hydrate, and return a WordPredictionService instance.
 
-def _initialise_db(db_path: Path) -> Path:
+    This bootstrapper:
+    1. Ensures the SQLite database and schema exist.
+    2. Creates the SQLite word repository.
+    3. Seeds the repository if it is empty.
+    4. Builds the encoder, word store, completion index, and service.
+    5. Hydrates the service from persisted repository data.
+
+    Args:
+    - config: Validated word prediction service configuration.
+
+    Returns:
+    - WordPredictionService: Hydrated service ready for use.
+
+    Raises:
+    - BootstrapError: If database setup, seeding, service construction, or
+      hydration fails.
+    """
     try:
-        # connect to DB, create if does not exist
-        conn = sqlite3.connect(db_path)
+        db_path = bootstrap_sqlite_database(config.db_path)
 
-        # initialise schema
+        repository = SqliteWordRepository(db_path)
 
-        cursor = conn.cursor()
+        if repository.is_empty():
+            seed_words = load_seed_words(config.language)
+            repository.seed(NewWord(word, frequency=0, source=WordSource.SEED) for word in seed_words)
 
-    except sqlite3.Error as e:
-        raise Exception() from e
+        encoding_spec = get_encoding_spec(config.language)
+        key_encoder = KeyEncoder(encoding_spec)
 
-    return Path.home()
+        word_store = InMemoryWordStore()
 
+        completion_index = RankedCompletionIndex(
+            keyspace=key_encoder.index_key_space,
+            ranking_policy=config.ranking_policy,
+            k=config.k,
+        )
 
-def _build_repository() -> None:
-    return
+        service = WordPredictionService(
+            word_repository=repository,
+            word_store=word_store,
+            key_encoder=key_encoder,
+            completion_index=completion_index,
+        )
 
+        service.hydrate()
+        return service
 
-def _seed_repository() -> None:
-    return
-
-
-def _build_service() -> None:
-    return
-
-
-def bootstrap_word_prediction_service(config: WordPredictionConfig) -> None:
-    return
+    except (
+        BootstrapError,
+        RepositoryError,
+        WordPredictionConfigError,
+        WordPredictionServiceError,
+        EncodingError,
+        TypeError,
+        ValueError,
+    ) as e:
+        raise BootstrapError('Failed to bootstrap word prediction service') from e

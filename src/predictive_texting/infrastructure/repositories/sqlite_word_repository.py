@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Iterable
+from pathlib import Path
 
 from ...application.word_prediction.interfaces import WordRepositoryProtocol
 from ...domain.lexicon.types import (
@@ -42,14 +43,14 @@ class SqliteWordRepository(WordRepositoryProtocol):
     _db_path: str
     _conn: sqlite3.Connection | None
 
-    def __init__(self, db_path: str) -> None:
+    def __init__(self, db_path: Path | str) -> None:
         """
         Initialize the repository and open a SQLite connection.
 
         Raises:
         - RepositoryError: If the database connection cannot be established.
         """
-        self._db_path = db_path
+        self._db_path = str(db_path)
         self._conn = None
         self._connect()
 
