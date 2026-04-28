@@ -79,6 +79,7 @@ markers = ["unit", "integration", "e2e"]
 [tool.mypy]
 python-version = "3.13"
 strict = true
+disable_error_code = ["no-untyped-decorator"]
 
 
 ##################################################################################
