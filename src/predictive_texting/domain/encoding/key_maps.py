@@ -1,0 +1,31 @@
+"""
+Canonical character-to-key mappings for supported language encodings.
+
+Design Note:
+Mappings are defined using domain value objects (`Character`, `IndexKey`)
+rather than primitive `str`/`int` values. This keeps the data aligned with
+encoding-domain concepts and ensures invariants are applied at construction.
+
+In principle, a more memory-efficient primitive representation could be used,
+but these mappings are small and fixed in size, so the current design
+prioritizes clarity and correctness.
+"""
+
+from __future__ import annotations
+
+from .types import Char2KeyMap, Character, IndexKey
+
+ENGLISH_T9_MAP: Char2KeyMap = {
+    Character(c): IndexKey(k)
+    for k, chars in {
+        2: 'abc',
+        3: 'def',
+        4: 'ghi',
+        5: 'jkl',
+        6: 'mno',
+        7: 'pqrs',
+        8: 'tuv',
+        9: 'wxyz',
+    }.items()
+    for c in chars
+}
