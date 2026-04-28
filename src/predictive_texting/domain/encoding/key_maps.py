@@ -1,5 +1,8 @@
 """
-Canonical character-to-key mappings for supported language encodings.
+Character-to-key mappings for supported encoding schemes.
+
+Defines how characters are converted into index keys for different encoding
+strategies (e.g. T9, QWERTY).
 
 Design Note:
 Mappings are defined using domain value objects (`Character`, `IndexKey`)
@@ -15,6 +18,8 @@ from __future__ import annotations
 
 from .types import Char2KeyMap, Character, IndexKey
 
+# T9 keypad mapping for English characters.
+# Multiple characters share the same numeric key.
 ENGLISH_T9_MAP: Char2KeyMap = {
     Character(c): IndexKey(k)
     for k, chars in {
@@ -31,6 +36,8 @@ ENGLISH_T9_MAP: Char2KeyMap = {
 }
 
 
+# QWERTY-style mapping where each character maps to a unique integer key.
+# This enables standard prefix-based autocomplete behaviour.
 ENGLISH_QWERTY_MAP: Char2KeyMap = {
     Character(c): IndexKey(k) for k, c in enumerate('abcdefghijklmnopqrstuvwxyz', start=1)
 }

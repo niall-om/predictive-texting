@@ -25,16 +25,22 @@ from predictive_texting.infrastructure.bootstrap.word_prediction import bootstra
 
 
 class CandidateResponse(BaseModel):
+    """API response model for a single candidate word."""
+
     word_id: int
     word: str
 
 
 class PredictionResponse(BaseModel):
+    """API response model for prediction results."""
+
     query: str
     candidates: list[CandidateResponse]
 
 
 class HealthResponse(BaseModel):
+    """API response model for health-check status."""
+
     status: str
 
 
@@ -44,6 +50,12 @@ class HealthResponse(BaseModel):
 
 
 def _build_config() -> WordPredictionConfig:
+    """
+    Build the demo configuration for the word prediction service.
+
+    The demo currently uses English with QWERTY encoding so `/predict/text`
+    behaves like standard prefix-based autocomplete.
+    """
     data_dir = Path.cwd() / 'data'
     data_dir.mkdir(exist_ok=True)
 
@@ -59,13 +71,13 @@ def _build_config() -> WordPredictionConfig:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
-    FastAPI lifespan hook.
+    Manage FastAPI application startup and shutdown.
 
-    Code before `yield` runs once at application startup.
-    We bootstrap and hydrate the word prediction service here so it can be reused
-    across requests without rebuilding the in-memory index each time.
+    On startup, bootstrap and hydrate the word prediction service once, then
+    store it on `app.state` so all requests can reuse the same in-memory index.
 
-    Code after `yield` would run once at application shutdown.
+    Code before `yield` runs during application startup.
+    Code after `yield` runs during application shutdown.
     """
 
     # Note:
@@ -98,10 +110,17 @@ app = FastAPI(
 
 
 def _get_service(request: Request) -> WordPredictionService:
+    """
+    Retrieve the shared word prediction service from FastAPI app state.
+
+    The service is created once during application startup and reused across
+    requests.
+    """
     return cast(WordPredictionService, request.app.state.word_prediction_service)
 
 
 def _candidate_to_response(candidate: CandidateWord) -> CandidateResponse:
+    """Convert an application-layer candidate DTO into an API response model."""
     return CandidateResponse(
         word_id=candidate.word_id.value,
         word=candidate.word,
@@ -109,6 +128,7 @@ def _candidate_to_response(candidate: CandidateWord) -> CandidateResponse:
 
 
 def _candidates_to_response(candidates: list[CandidateWord]) -> list[CandidateResponse]:
+    """Convert candidate DTOs into API response models."""
     return [_candidate_to_response(candidate) for candidate in candidates]
 
 
@@ -119,25 +139,24 @@ def _candidates_to_response(candidates: list[CandidateWord]) -> list[CandidateRe
 
 @app.get('/health', response_model=HealthResponse)
 def health() -> HealthResponse:
+    """Return basic service health status."""
     return HealthResponse(status='ok')
 
 
 @app.get('/predict/keys', response_model=PredictionResponse)
 def predict_by_keys(keys: str, request: Request) -> PredictionResponse:
     """
-    Predict candidate words from a sequence of index keys.
+    Predict candidate words from a sequence of encoded index keys.
 
-    This endpoint operates on the encoded keyspace used internally by the system.
-    The meaning of each key depends on the configured encoding scheme.
+    This endpoint exposes the lower-level encoded key interface used internally by
+    the completion index. The meaning of each key depends on the configured encoding
+    scheme.
 
-    - Under T9 encoding: keys are digits (e.g. "4663")
-    - Under QWERTY encoding: keys correspond to character positions (e.g. 1–26)
+    For the current QWERTY demo configuration, letters map to integer keys:
+        a -> 1, b -> 2, ..., z -> 26
 
-    Example (T9):
-        keys = "4663" → ["home", "good", ...]
-
-    Example (QWERTY):
-        keys = "8,15" (or equivalent representation) → ["home", ...]
+    Example:
+        keys = "12" represents the encoded prefix "ab".
     """
 
     service = _get_service(request)
@@ -166,15 +185,15 @@ def predict_by_text(text: str, request: Request) -> PredictionResponse:
     """
     Predict candidate words from text input using the configured encoding.
 
-    The input text is encoded into a sequence of index keys using the configured
-    encoding scheme (currently QWERTY for English). The service then returns
-    candidate words that match this encoded sequence.
+    The input text is encoded into index keys using the configured encoding scheme,
+    then matched against the in-memory completion index.
 
-    Under QWERTY encoding, each character maps to a unique key, so this endpoint
-    behaves like standard prefix-based autocomplete.
+    The demo currently uses English QWERTY encoding, where each character maps to a
+    unique integer key. This makes the endpoint behave like standard prefix-based
+    autocomplete.
 
     Example:
-        text = "ho" → ["home", "house", ...]
+        text = "he" -> ["he", "her", "hey", "head", ...]
     """
 
     service = _get_service(request)

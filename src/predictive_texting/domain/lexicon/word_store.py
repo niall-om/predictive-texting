@@ -1,3 +1,11 @@
+"""
+In-memory storage for word records.
+
+The word store holds validated word data in memory and provides fast lookup by
+identifier. It acts as the runtime representation of the lexicon after data has
+been loaded from persistent storage.
+"""
+
 from __future__ import annotations
 
 from collections.abc import Iterable

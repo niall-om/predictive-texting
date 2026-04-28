@@ -1,3 +1,10 @@
+"""
+Core domain types for the lexicon (word storage and validation).
+
+Defines value objects and validation logic for words, identifiers, frequencies,
+and word creation. These types enforce domain constraints before persistence.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -15,6 +22,8 @@ class WordSource(str, Enum):
 
 @dataclass(frozen=True, slots=True)
 class WordId:
+    """Unique identifier for a persisted word."""
+
     value: int
 
     def __post_init__(self) -> None:
@@ -46,7 +55,16 @@ class WordRecord:
 
 @dataclass(frozen=True, slots=True)
 class NewWord:
-    """Represents a new word that has not been persisted/has no persistence ID."""
+    """
+    Domain object representing a word to be created.
+
+    Encapsulates validation for:
+    - word text
+    - frequency
+    - source
+
+    Used by repositories to persist new word entries.
+    """
 
     word: Word
     frequency: int
@@ -64,12 +82,33 @@ class NewWord:
 
 
 def normalise_word(word: Word) -> str:
+    """
+    Normalise a word into its canonical form.
+
+    Applies standard transformations (e.g. trimming whitespace, converting to
+    lowercase) so that words are stored and compared consistently.
+
+    Args:
+        word: Raw input word.
+
+    Returns:
+        Normalised word string.
+    """
     if not isinstance(word, str):
         raise TypeError(f'Invalid word type; expected `str`, got {type(word)!r}')
     return word.strip().lower()
 
 
 def validate_word_id(word_id: WordId) -> None:
+    """
+    Validate that a word identifier is valid.
+
+    Ensures the identifier is a positive integer suitable for use as a primary
+    key in the lexicon.
+
+    Raises:
+        ValueError: If the identifier is invalid.
+    """
     if not isinstance(word_id, WordId):
         raise TypeError(f'Invalid word_id type; expected `int`, got {type(word_id)!r}')
     if word_id.value < 1:
@@ -77,6 +116,14 @@ def validate_word_id(word_id: WordId) -> None:
 
 
 def validate_word(word: Word) -> None:
+    """
+    Validate that a word meets domain constraints.
+
+    Ensures the word contains only valid alphabetic characters and is not empty.
+
+    Raises:
+        ValueError: If validation fails.
+    """
     # runtime type checking handled by _normalise_word()
     if not word:
         raise ValueError('Word must be non-empty')

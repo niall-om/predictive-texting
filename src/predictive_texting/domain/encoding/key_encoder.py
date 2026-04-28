@@ -31,6 +31,12 @@ class KeyEncoder(KeyEncoderProtocol):
     _index_key_space: IndexKeySpace = field(init=False)
 
     def __post_init__(self) -> None:
+        """
+        Build derived lookup structures after initialisation.
+
+        Constructs the reverse key-to-characters mapping and the encoder's
+        IndexKeySpace from the configured character-to-key map.
+        """
         # build _key_to_chars reverse lookup mapping
         temp: dict[IndexKey, set[Character]] = {}
         for char, key in self.spec.char_to_key_map.items():

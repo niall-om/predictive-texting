@@ -11,6 +11,15 @@ from .db.schema_loader import load_schema_sql
 
 
 def bootstrap_sqlite_database(db_path: Path) -> Path:
+    """
+    Initialise a SQLite database at the given path.
+
+    Ensures the database file exists and applies the schema if the database is
+    being created for the first time. Uses a file-based lock to prevent multiple
+    processes from attempting to bootstrap the schema concurrently.
+
+    Returns the path to the initialised database.
+    """
     # validate path
     if not isinstance(db_path, Path):
         raise BootstrapError(f'Invalid db_path {db_path!r}; expected a Path object, got {type(db_path)!r}')

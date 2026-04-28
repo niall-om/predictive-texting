@@ -1,14 +1,26 @@
+"""
+Domain value objects and type aliases for text-to-key encoding.
+
+These types define the small primitives used by encoding specs, key encoders,
+and completion indexes. They keep validation close to the encoding domain.
+"""
+
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from typing import NewType, TypeAlias
 
+# Integer key used by encoding schemes and completion indexes.
+# For T9 this corresponds to keypad digits; for QWERTY it currently maps
+# characters to stable integer positions.
 IndexKey = NewType('IndexKey', int)
 
 
 @dataclass(frozen=True, slots=True)
 class Character:
+    """Validated single-character value object used in encoding maps."""
+
     value: str
 
     def __post_init__(self) -> None:
@@ -21,12 +33,22 @@ class Character:
         return self.value
 
 
+# Immutable set of valid characters for an encoding specification.
 CharacterSet: TypeAlias = frozenset[Character]
+
+# Mapping from validated characters to index keys.
 Char2KeyMap: TypeAlias = dict[Character, IndexKey]
 
 
 @dataclass(frozen=True, slots=True)
 class EncodedIndexKeySequence:
+    """
+    Immutable sequence of index keys produced by a key encoder.
+
+    The completion index uses this sequence as the encoded representation of a
+    word or input prefix.
+    """
+
     _keys: tuple[IndexKey, ...]
 
     def __iter__(self) -> Iterator[IndexKey]:
@@ -39,15 +61,16 @@ class EncodedIndexKeySequence:
         return self._keys[index]
 
     def append(self, key: IndexKey) -> EncodedIndexKeySequence:
+        """Return a new encoded sequence with key appended."""
         return EncodedIndexKeySequence(self._keys + (key,))
 
     # factory methods
     @classmethod
     def from_iterable(cls, keys: Iterable[IndexKey]) -> EncodedIndexKeySequence:
-        """Build and return an EncodedKeySequence from an iterable of IndexKeys."""
+        """Build an encoded key sequence from an iterable of index keys."""
         return cls(tuple(keys))
 
     @classmethod
     def empty(cls) -> EncodedIndexKeySequence:
-        """Return an empty EncodedKeySequence"""
+        """Return an empty encoded key sequence."""
         return cls(())

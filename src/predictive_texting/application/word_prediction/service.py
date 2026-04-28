@@ -23,6 +23,18 @@ from .interfaces import WordRepositoryProtocol
 
 
 class WordPredictionService:
+    """
+    Application service responsible for generating word predictions.
+
+    This service coordinates:
+    - encoding input into index keys
+    - querying the completion index for matching candidates
+    - applying ranking policies to order results
+
+    It operates on in-memory data structures (word store and completion index)
+    that are hydrated at application startup for fast lookup.
+    """
+
     __slots__ = (
         '_word_repository',
         '_word_store',
@@ -43,6 +55,15 @@ class WordPredictionService:
         key_encoder: KeyEncoderProtocol,
         completion_index: RankedCompletionIndexProtocol,
     ) -> None:
+        """
+        Initialise the word prediction service.
+
+        Args:
+            encoder: Encodes text into index keys based on the configured encoding scheme.
+            completion_index: In-memory index mapping key sequences to candidate words.
+            ranking_policy: Strategy for ordering candidate words.
+            k: Maximum number of candidates to return.
+        """
         # validate expected runtime lifecycle contract:
         # repository/encoder may already be ready, but in-memory runtime structures
         # should be empty and populated via hydrate

@@ -1,3 +1,12 @@
+"""
+Registry of encoding specifications.
+
+Maps (language, encoding scheme) pairs to concrete LanguageEncodingSpec
+instances, which define the character set and key mapping used by the encoder.
+
+Language is decoupled from encoding scheme via the registry.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -52,7 +61,7 @@ class LanguageEncodingSpec:
             raise EncodingError(f'Characters in key map not in character set: {extra!r}')
 
 
-# Private Registry
+# Registry of supported (language, encoding scheme) combinations.
 _ENCODING_SPECS: dict[tuple[Language, EncodingScheme], LanguageEncodingSpec] = {
     (Language.ENGLISH, EncodingScheme.T9): LanguageEncodingSpec(
         language=Language.ENGLISH,
@@ -72,6 +81,19 @@ _ENCODING_SPECS: dict[tuple[Language, EncodingScheme], LanguageEncodingSpec] = {
 
 # Language encoding specs should be fetched via this function.
 def get_encoding_spec(language: Language, scheme: EncodingScheme) -> LanguageEncodingSpec:
+    """
+    Retrieve the encoding specification for a given language and encoding scheme.
+
+    Args:
+        language: Natural language (e.g. English).
+        scheme: Encoding scheme (e.g. T9 or QWERTY).
+
+    Returns:
+        The corresponding LanguageEncodingSpec.
+
+    Raises:
+        EncodingError: If no matching specification is registered.
+    """
     try:
         return _ENCODING_SPECS[(language, scheme)]
     except KeyError:

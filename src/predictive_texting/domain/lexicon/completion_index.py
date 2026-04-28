@@ -1,3 +1,10 @@
+"""
+Completion index for fast prefix-based lookup.
+
+Maps encoded key sequences to candidate word identifiers, enabling efficient
+retrieval of words matching a given prefix without scanning the entire lexicon.
+"""
+
 from __future__ import annotations
 
 from collections.abc import Iterator
@@ -11,6 +18,15 @@ from .protocols import RankedCompletionIndexProtocol
 
 
 class _TrieNode:
+    """
+    Internal trie node used by RankedCompletionIndex.
+
+    Each node stores:
+    - child references indexed by keyspace position
+    - word IDs that terminate at this node
+    - cached top-k ranked candidates for the subtree rooted at this node
+    """
+
     __slots__ = (
         '_parent',
         '_child_index',
@@ -25,6 +41,7 @@ class _TrieNode:
     _top_k: list[WordId]
 
     def __init__(self, keyspace_size: int, parent: _TrieNode | None = None, child_index: int | None = None) -> None:
+        """Initialise an empty trie node with fixed-size child storage."""
         self._parent = parent
         self._child_index = child_index
         self._children = [None] * keyspace_size
@@ -59,6 +76,14 @@ class RankedCompletionIndex(RankedCompletionIndexProtocol):
     _word_count: int
 
     def __init__(self, keyspace: IndexKeySpace, ranking_policy: RankingPolicy, k: int) -> None:
+        """
+        Initialise an empty ranked completion index.
+
+        Args:
+            keyspace: Valid set of index keys supported by this index.
+            ranking_policy: Policy used to rank candidate word IDs.
+            k: Number of top candidates cached and returned per prefix.
+        """
         if k <= 0:
             raise ValueError(f'k must be an integer value >= 1; got {k!r}')
         self._default_k = k
@@ -70,14 +95,17 @@ class RankedCompletionIndex(RankedCompletionIndexProtocol):
 
     @property
     def k(self) -> int:
+        """Return the configured number of ranked candidates per prefix."""
         return self._default_k
 
     @property
     def word_count(self) -> int:
+        """Return the number of word IDs currently stored in the index."""
         return self._word_count
 
     @property
     def node_count(self) -> int:
+        """Return the number of trie nodes currently allocated."""
         return self._node_count
 
     def insert(self, word_id: WordId, sequence: EncodedIndexKeySequence) -> None:
@@ -169,9 +197,15 @@ class RankedCompletionIndex(RankedCompletionIndexProtocol):
                 raise CompletionIndexError(f'Invalid key in sequence: {key!r}')
 
     def _make_node(self, parent: _TrieNode | None = None, child_index: int | None = None) -> _TrieNode:
+        """Create a trie node using the index keyspace size."""
         return _TrieNode(self._keyspace.size(), parent, child_index)
 
     def _find_node(self, sequence: EncodedIndexKeySequence) -> _TrieNode | None:
+        """
+        Return the trie node for an encoded sequence, if present.
+
+        Returns None if any key along the path is missing.
+        """
         node = self._root
         for key in sequence:
             index = self._keyspace.index(key)
@@ -182,11 +216,13 @@ class RankedCompletionIndex(RankedCompletionIndexProtocol):
         return node
 
     def _children(self, node: _TrieNode) -> Iterator[_TrieNode]:
+        """Yield non-empty child nodes for a trie node."""
         for child in node._children:
             if child is not None:
                 yield child
 
     def _has_children(self, node: _TrieNode) -> bool:
+        """Return True if the node has at least one child."""
         return any(node._children)
 
     def _recompute_path_ranking_and_prune(self, starting_node: _TrieNode) -> None:
@@ -223,9 +259,20 @@ class RankedCompletionIndex(RankedCompletionIndexProtocol):
         node._top_k = self._ranking_policy.rank(candidates, self._default_k)
 
     def _is_prunable(self, node: _TrieNode) -> bool:
+        """
+        Return True if a node can be safely removed from the trie.
+
+        The root is never pruned. Other nodes are prunable only when they have no
+        children and no terminal word IDs.
+        """
         return node is not self._root and not self._has_children(node) and not node._word_ids
 
     def _prune_node(self, node: _TrieNode) -> None:
+        """
+        Remove a prunable node from its parent.
+
+        If the node is not prunable, this method is a no-op.
+        """
         if not self._is_prunable(node):
             return
 
@@ -238,6 +285,13 @@ class RankedCompletionIndex(RankedCompletionIndexProtocol):
         self._node_count -= 1
 
     def _insert(self, word_id: WordId, sequence: EncodedIndexKeySequence) -> None:
+        """
+        Insert a word ID at the terminal node for an encoded sequence.
+
+        Creates any missing trie nodes along the path, stores the word ID at the
+        terminal node, increments counts, and recomputes cached rankings along the
+        affected path.
+        """
         node = self._root
 
         for key in sequence:
@@ -259,6 +313,15 @@ class RankedCompletionIndex(RankedCompletionIndexProtocol):
         self._recompute_path_ranking_and_prune(node)
 
     def _delete(self, word_id: WordId, sequence: EncodedIndexKeySequence) -> bool:
+        """
+        Remove a word ID from the terminal node for an encoded sequence.
+
+        Returns True if the word ID was present and removed. Returns False if the
+        sequence exists but the word ID is not stored at its terminal node.
+
+        Raises:
+            CompletionIndexError: If the encoded sequence is not stored in the index.
+        """
         node = self._find_node(sequence)
         if node is None:
             raise CompletionIndexError('sequence is not stored in the index')
@@ -272,10 +335,21 @@ class RankedCompletionIndex(RankedCompletionIndexProtocol):
         return False
 
     def _get_ranked_candidates(self, sequence: EncodedIndexKeySequence) -> list[WordId]:
+        """
+        Return cached top-k candidates for an encoded sequence.
+
+        Returns an empty list if the sequence is not present in the trie.
+        """
         node = self._find_node(sequence)
         return list(node._top_k) if node is not None else []
 
     def _refresh_index(self, sequence: EncodedIndexKeySequence) -> None:
+        """
+        Recompute cached ranking summaries for an existing encoded sequence.
+
+        Raises:
+            CompletionIndexError: If the sequence is not stored in the index.
+        """
         node = self._find_node(sequence)
         if node is None:
             raise CompletionIndexError('sequence is not stored in the index')
