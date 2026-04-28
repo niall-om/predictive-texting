@@ -356,7 +356,10 @@ def demo_ui() -> HTMLResponse:
                 </p>
 
                 <textarea id="editor" placeholder="Start typing a message..."></textarea>
-
+                <p class="hint">
+                    Input is currently limited to lowercase alphabetic characters.
+                </p>
+                        
                 <div class="section-title">Suggestions</div>
                 <p class="hint">Click a suggestion to insert it and record the selection.</p>
                 <div id="suggestions">
