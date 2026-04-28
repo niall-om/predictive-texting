@@ -184,107 +184,342 @@ def _candidates_to_response(candidates: list[CandidateWord]) -> list[CandidateRe
 
 @app.get('/', response_class=HTMLResponse)
 def demo_ui() -> HTMLResponse:
+    """
+    Serve a minimal browser-based demo UI for the predictive text service.
+
+    This endpoint returns a lightweight HTML page with embedded JavaScript that
+    demonstrates the core capabilities of the system:
+
+    - Real-time word prediction via `/predict/text`
+    - Word insertion into a textarea editor
+    - Selection tracking via `/words/{word_id}/select` to update frequency and ranking
+
+    Design Notes:
+    - The UI is intentionally minimal and self-contained (no build step, no frameworks).
+    - All editor state is managed client-side in the browser.
+    - The backend remains focused on prediction, persistence, and ranking logic.
+    - The UI extracts the current word at the cursor and queries the backend for suggestions.
+    - Selecting a suggestion updates both the UI and backend state, enabling a live personalization loop.
+
+    Performance Considerations:
+    - The frontend uses a simple debounce to limit request frequency.
+    - The backend remains fast due to the in-memory completion index (Trie),
+    avoiding database lookups on each prediction request.
+
+    This endpoint is designed for demonstration and exploratory use, providing
+    a tangible interface to interact with the system without introducing the
+    complexity of a full frontend architecture.
+    """
+
     return HTMLResponse("""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Predictive Text Demo</title>
-                <style>
-                    body { font-family: Arial; max-width: 600px; margin: 40px auto; }
-                    textarea { width: 100%; height: 120px; font-size: 16px; }
-                    .suggestion { cursor: pointer; padding: 4px; }
-                    .suggestion:hover { background-color: #eee; }
-                </style>
-            </head>
-            <body>
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <title>Predictive Text Demo</title>
+            <style>
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+                    max-width: 760px;
+                    margin: 48px auto;
+                    padding: 0 20px;
+                    background: #fafafa;
+                    color: #222;
+                }
 
-            <h2>Predictive Text Demo</h2>
+                .card {
+                    background: white;
+                    border: 1px solid #e5e5e5;
+                    border-radius: 14px;
+                    padding: 24px;
+                    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+                }
 
-            <textarea id="editor" placeholder="Start typing..."></textarea>
+                h1 {
+                    margin-top: 0;
+                    margin-bottom: 8px;
+                    font-size: 28px;
+                }
 
-            <h4>Suggestions</h4>
-            <div id="suggestions"></div>
+                .subtitle {
+                    margin-top: 0;
+                    color: #666;
+                    line-height: 1.5;
+                }
 
-            <script>
-            const editor = document.getElementById("editor");
-            const suggestionsDiv = document.getElementById("suggestions");
+                textarea {
+                    width: 100%;
+                    height: 140px;
+                    box-sizing: border-box;
+                    margin-top: 16px;
+                    padding: 14px;
+                    font-size: 16px;
+                    line-height: 1.5;
+                    border: 1px solid #ccc;
+                    border-radius: 10px;
+                    resize: vertical;
+                }
 
-            let timeout = null;
+                textarea:focus {
+                    outline: none;
+                    border-color: #555;
+                    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
+                }
 
-            editor.addEventListener("input", () => {
-                clearTimeout(timeout);
-                timeout = setTimeout(fetchSuggestions, 200);
-            });
+                .section-title {
+                    margin-top: 24px;
+                    margin-bottom: 8px;
+                    font-size: 16px;
+                    font-weight: 700;
+                }
 
-            function getCurrentWord() {
-                const text = editor.value;
-                const cursor = editor.selectionStart;
+                .hint {
+                    margin-top: 0;
+                    margin-bottom: 10px;
+                    color: #777;
+                    font-size: 14px;
+                }
 
-                const before = text.slice(0, cursor);
-                const match = before.match(/([a-zA-Z]+)$/);
+                #suggestions {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    min-height: 42px;
+                }
 
-                return match ? match[1] : "";
+                .suggestion {
+                    cursor: pointer;
+                    border: 1px solid #ddd;
+                    border-radius: 999px;
+                    padding: 8px 12px;
+                    background: #f7f7f7;
+                    font-size: 15px;
+                    transition: transform 0.08s ease, background 0.12s ease, border-color 0.12s ease;
+                }
+
+                .suggestion:hover {
+                    background: #eeeeee;
+                    border-color: #cfcfcf;
+                    transform: translateY(-1px);
+                }
+
+                .suggestion:active {
+                    transform: translateY(0);
+                }
+
+                .empty {
+                    color: #999;
+                    font-size: 14px;
+                    padding: 8px 0;
+                }
+
+                #status {
+                    margin-top: 18px;
+                    padding: 10px 12px;
+                    border-radius: 8px;
+                    background: #f2f2f2;
+                    color: #555;
+                    font-size: 14px;
+                    min-height: 20px;
+                }
+
+                .status-success {
+                    background: #eef8ef !important;
+                    color: #256b2c !important;
+                }
+
+                .status-error {
+                    background: #fdeeee !important;
+                    color: #8a2525 !important;
+                }
+
+                .footer-note {
+                    margin-top: 18px;
+                    color: #777;
+                    font-size: 13px;
+                    line-height: 1.5;
+                }
+
+                code {
+                    background: #f1f1f1;
+                    padding: 2px 5px;
+                    border-radius: 4px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <h1>Predictive Text Demo</h1>
+                <p class="subtitle">
+                    Type a message below. The app predicts the current word using the backend
+                    prediction service and an in-memory completion index.
+                </p>
+
+                <textarea id="editor" placeholder="Start typing a message..."></textarea>
+
+                <div class="section-title">Suggestions</div>
+                <p class="hint">Click a suggestion to insert it and record the selection.</p>
+                <div id="suggestions">
+                    <div class="empty">Start typing to see predictions.</div>
+                </div>
+
+                <div id="status">Ready.</div>
+
+                <p class="footer-note">
+                    Demo behaviour: selecting a suggestion calls <code>POST /words/{word_id}/select</code>,
+                    which increments frequency and refreshes ranking state.
+                </p>
+            </div>
+
+        <script>
+        const editor = document.getElementById("editor");
+        const suggestionsDiv = document.getElementById("suggestions");
+        const statusDiv = document.getElementById("status");
+
+        let timeout = null;
+        let latestRequestId = 0;
+
+        editor.addEventListener("input", () => {
+            clearTimeout(timeout);
+            timeout = setTimeout(fetchSuggestions, 180);
+        });
+
+        editor.addEventListener("click", () => {
+            clearTimeout(timeout);
+            timeout = setTimeout(fetchSuggestions, 180);
+        });
+
+        editor.addEventListener("keyup", () => {
+            clearTimeout(timeout);
+            timeout = setTimeout(fetchSuggestions, 180);
+        });
+
+        function setStatus(message, kind = "neutral") {
+            statusDiv.textContent = message;
+            statusDiv.classList.remove("status-success", "status-error");
+
+            if (kind === "success") {
+                statusDiv.classList.add("status-success");
+            } else if (kind === "error") {
+                statusDiv.classList.add("status-error");
+            }
+        }
+
+        function getCurrentWordInfo() {
+            const text = editor.value;
+            const cursor = editor.selectionStart;
+
+            const before = text.slice(0, cursor);
+            const match = before.match(/([a-zA-Z]+)$/);
+
+            if (!match) {
+                return null;
             }
 
-            async function fetchSuggestions() {
-                const word = getCurrentWord();
+            const word = match[1];
+            const start = cursor - word.length;
 
-                if (!word) {
-                    suggestionsDiv.innerHTML = "";
+            return {
+                word,
+                start,
+                end: cursor
+            };
+        }
+
+        function renderEmpty(message) {
+            suggestionsDiv.innerHTML = "";
+            const empty = document.createElement("div");
+            empty.className = "empty";
+            empty.textContent = message;
+            suggestionsDiv.appendChild(empty);
+        }
+
+        async function fetchSuggestions() {
+            const requestId = ++latestRequestId;
+            const current = getCurrentWordInfo();
+
+            if (!current || current.word.length === 0) {
+                renderEmpty("Start typing a word to see predictions.");
+                return;
+            }
+
+            try {
+                const res = await fetch(`/predict/text?text=${encodeURIComponent(current.word)}`);
+
+                if (!res.ok) {
+                    renderEmpty("No suggestions available.");
                     return;
                 }
 
-                const res = await fetch(`/predict/text?text=${word}`);
                 const data = await res.json();
+
+                if (requestId !== latestRequestId) {
+                    return;
+                }
 
                 suggestionsDiv.innerHTML = "";
 
-                data.candidates.forEach(c => {
-                    const div = document.createElement("div");
-                    div.className = "suggestion";
-                    div.textContent = c.word;
+                if (!data.candidates || data.candidates.length === 0) {
+                    renderEmpty(`No suggestions for "${current.word}".`);
+                    return;
+                }
 
-                    div.onclick = () => applySuggestion(c);
+                data.candidates.forEach(candidate => {
+                    const button = document.createElement("button");
+                    button.className = "suggestion";
+                    button.type = "button";
+                    button.textContent = candidate.word;
+                    button.title = `Insert "${candidate.word}"`;
 
-                    suggestionsDiv.appendChild(div);
+                    button.onclick = () => applySuggestion(candidate);
+
+                    suggestionsDiv.appendChild(button);
                 });
+
+            } catch (err) {
+                renderEmpty("Could not fetch suggestions.");
+                setStatus("Prediction request failed.", "error");
+            }
+        }
+
+        async function applySuggestion(candidate) {
+            const current = getCurrentWordInfo();
+
+            if (!current) {
+                return;
             }
 
-            async function applySuggestion(candidate) {
-                const text = editor.value;
-                const cursor = editor.selectionStart;
+            const text = editor.value;
+            const before = text.slice(0, current.start);
+            const after = text.slice(current.end);
 
-                const before = text.slice(0, cursor);
-                const after = text.slice(cursor);
+            editor.value = before + candidate.word + after;
 
-                const match = before.match(/([a-zA-Z]+)$/);
-                if (!match) return;
+            const newCursor = current.start + candidate.word.length;
+            editor.focus();
+            editor.setSelectionRange(newCursor, newCursor);
 
-                const wordStart = cursor - match[1].length;
-
-                const newText =
-                    text.slice(0, wordStart) +
-                    candidate.word +
-                    after;
-
-                editor.value = newText;
-
-                // move cursor to end of inserted word
-                const newCursor = wordStart + candidate.word.length;
-                editor.setSelectionRange(newCursor, newCursor);
-
-                // notify backend (personalization)
-                await fetch(`/words/${candidate.word_id}/select`, {
+            try {
+                const res = await fetch(`/words/${candidate.word_id}/select`, {
                     method: "POST"
                 });
 
-                fetchSuggestions();
-            }
-            </script>
+                if (!res.ok) {
+                    setStatus(`Inserted "${candidate.word}", but selection update failed.`, "error");
+                    return;
+                }
 
-            </body>
-            </html>
-                """)
+                setStatus(`Inserted "${candidate.word}" and recorded selection.`, "success");
+                await fetchSuggestions();
+
+            } catch (err) {
+                setStatus(`Inserted "${candidate.word}", but selection update failed.`, "error");
+            }
+        }
+        </script>
+        </body>
+        </html>
+            """)
 
 
 @app.get('/health', response_model=HealthResponse)
