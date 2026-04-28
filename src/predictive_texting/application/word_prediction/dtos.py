@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ...domain.lexicon.types import Word, WordId
+from predictive_texting.domain.lexicon.types import Word, WordId
 
 
 @dataclass(frozen=True, slots=True)

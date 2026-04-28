@@ -29,3 +29,8 @@ ENGLISH_T9_MAP: Char2KeyMap = {
     }.items()
     for c in chars
 }
+
+
+ENGLISH_QWERTY_MAP: Char2KeyMap = {
+    Character(c): IndexKey(k) for k, c in enumerate('abcdefghijklmnopqrstuvwxyz', start=1)
+}

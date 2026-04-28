@@ -4,8 +4,8 @@ import sqlite3
 from collections.abc import Iterable
 from pathlib import Path
 
-from ...application.word_prediction.interfaces import WordRepositoryProtocol
-from ...domain.lexicon.types import (
+from predictive_texting.application.word_prediction.interfaces import WordRepositoryProtocol
+from predictive_texting.domain.lexicon.types import (
     NewWord,
     Word,
     WordId,
@@ -15,7 +15,8 @@ from ...domain.lexicon.types import (
     validate_frequency,
     validate_word,
 )
-from ...exceptions.infrastructure import RepositoryError
+from predictive_texting.exceptions.infrastructure import RepositoryError
+
 from ..utils.time_utils import now_utc_str
 
 

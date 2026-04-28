@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Protocol
 
-from ...domain.lexicon.types import NewWord, Word, WordId, WordRecord
+from predictive_texting.domain.lexicon.types import NewWord, Word, WordId, WordRecord
 
 
 class WordRepositoryProtocol(Protocol):

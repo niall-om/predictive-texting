@@ -1,18 +1,19 @@
 from __future__ import annotations
 
-from ...application.word_prediction.config import RankingPolicyType, WordPredictionConfig
-from ...application.word_prediction.service import WordPredictionService
-from ...domain.encoding.encoding_specs import get_encoding_spec
-from ...domain.encoding.key_encoder import KeyEncoder
-from ...domain.lexicon.completion_index import RankedCompletionIndex
-from ...domain.lexicon.types import NewWord, WordSource
-from ...domain.lexicon.word_store import InMemoryWordStore
-from ...domain.ranking.frequency_ranking import FrequencyRankingPolicy
-from ...domain.ranking.protocols import RankingPolicy
-from ...exceptions.application import WordPredictionConfigError, WordPredictionServiceError
-from ...exceptions.domain import EncodingError
-from ...exceptions.infrastructure import BootstrapError, RepositoryError
-from ...infrastructure.repositories.sqlite_word_repository import SqliteWordRepository
+from predictive_texting.application.word_prediction.config import RankingPolicyType, WordPredictionConfig
+from predictive_texting.application.word_prediction.service import WordPredictionService
+from predictive_texting.domain.encoding.encoding_specs import get_encoding_spec
+from predictive_texting.domain.encoding.key_encoder import KeyEncoder
+from predictive_texting.domain.lexicon.completion_index import RankedCompletionIndex
+from predictive_texting.domain.lexicon.types import NewWord, WordSource
+from predictive_texting.domain.lexicon.word_store import InMemoryWordStore
+from predictive_texting.domain.ranking.frequency_ranking import FrequencyRankingPolicy
+from predictive_texting.domain.ranking.protocols import RankingPolicy
+from predictive_texting.exceptions.application import WordPredictionConfigError, WordPredictionServiceError
+from predictive_texting.exceptions.domain import EncodingError
+from predictive_texting.exceptions.infrastructure import BootstrapError, RepositoryError
+from predictive_texting.infrastructure.repositories.sqlite_word_repository import SqliteWordRepository
+
 from .database import bootstrap_sqlite_database
 from .db.seed_file_registry import load_seed_words
 
@@ -56,7 +57,7 @@ def bootstrap_word_prediction_service(config: WordPredictionConfig) -> WordPredi
             seed_words = load_seed_words(config.language)
             repository.seed(NewWord(word, frequency=0, source=WordSource.SEED) for word in seed_words)
 
-        encoding_spec = get_encoding_spec(config.language)
+        encoding_spec = get_encoding_spec(config.language, config.encoding_scheme)
         key_encoder = KeyEncoder(encoding_spec)
 
         word_store = InMemoryWordStore()

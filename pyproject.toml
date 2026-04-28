@@ -10,7 +10,7 @@ build-backend = "hatchling.build"
 [project]
 name = "predictive-text-service"
 version = "0.1.0"
-description = "A portfolio demo of a T9-style predictive text service built with layered architecture, SQLite persistence, and FastAPI."
+description = "A predictive text service demonstrating pluggable encoding schemes (T9 and QWERTY), in-memory indexing, and layered architecture with FastAPI and SQLite."
 readme = "README.md"
 requires-python = ">=3.13"
 license = { text = "MIT" }

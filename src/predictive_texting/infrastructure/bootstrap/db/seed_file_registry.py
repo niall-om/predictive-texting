@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from pathlib import Path
 
-from ....domain.encoding.languages import Language
+from predictive_texting.domain.encoding.languages import Language
 
 _BASE_DIR = Path(__file__).resolve().parent
 _SEED_FILES_DIR = _BASE_DIR / 'seed_files'

@@ -4,8 +4,9 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-from ...domain.encoding.languages import Language
-from ...exceptions.application import WordPredictionConfigError
+from predictive_texting.domain.encoding.languages import Language
+from predictive_texting.domain.encoding.schemes import EncodingScheme
+from predictive_texting.exceptions.application import WordPredictionConfigError
 
 
 class RankingPolicyType(str, Enum):
@@ -16,12 +17,14 @@ class RankingPolicyType(str, Enum):
 class WordPredictionConfig:
     db_path: Path
     language: Language
+    encoding_scheme: EncodingScheme
     ranking_policy_type: RankingPolicyType
     k: int
 
     def __post_init__(self) -> None:
         self._validate_path()
         self._validate_language()
+        self._validate_encoding_scheme()
         self._validate_ranking_policy_type()
         self._validate_k()
 
@@ -41,6 +44,12 @@ class WordPredictionConfig:
     def _validate_language(self) -> None:
         if not isinstance(self.language, Language):
             raise WordPredictionConfigError(f'Invalid language: {self.language!r}; expected a Language value')
+
+    def _validate_encoding_scheme(self) -> None:
+        if not isinstance(self.encoding_scheme, EncodingScheme):
+            raise WordPredictionConfigError(
+                f'Invalid encoding scheme: {self.encoding_scheme!r}; expected an EncodingScheme value'
+            )
 
     def _validate_ranking_policy_type(self) -> None:
         if not isinstance(self.ranking_policy_type, RankingPolicyType):

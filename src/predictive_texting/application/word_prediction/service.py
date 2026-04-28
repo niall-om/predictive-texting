@@ -2,13 +2,22 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from ...domain.encoding.protocols import KeyEncoderProtocol
-from ...domain.encoding.types import EncodedIndexKeySequence, IndexKey
-from ...domain.lexicon.protocols import RankedCompletionIndexProtocol, WordStoreProtocol
-from ...domain.lexicon.types import NewWord, Word, WordId, WordRecord, WordSource, normalise_word, validate_word
-from ...exceptions.application import WordPredictionServiceError
-from ...exceptions.domain import CompletionIndexError, EncodingError, WordStoreError
-from ...exceptions.infrastructure import RepositoryError
+from predictive_texting.domain.encoding.protocols import KeyEncoderProtocol
+from predictive_texting.domain.encoding.types import EncodedIndexKeySequence, IndexKey
+from predictive_texting.domain.lexicon.protocols import RankedCompletionIndexProtocol, WordStoreProtocol
+from predictive_texting.domain.lexicon.types import (
+    NewWord,
+    Word,
+    WordId,
+    WordRecord,
+    WordSource,
+    normalise_word,
+    validate_word,
+)
+from predictive_texting.exceptions.application import WordPredictionServiceError
+from predictive_texting.exceptions.domain import CompletionIndexError, EncodingError, WordStoreError
+from predictive_texting.exceptions.infrastructure import RepositoryError
+
 from .dtos import CandidateWord
 from .interfaces import WordRepositoryProtocol
 

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass
 
 from ...exceptions.domain import EncodingError
 from .character_sets import ENGLISH_LOWERCASE_ALPHABET
-from .key_maps import ENGLISH_T9_MAP
+from .key_maps import ENGLISH_QWERTY_MAP, ENGLISH_T9_MAP
 from .languages import Language
+from .schemes import EncodingScheme
 from .types import Char2KeyMap, CharacterSet
 
 
@@ -53,11 +53,16 @@ class LanguageEncodingSpec:
 
 
 # Private Registry
-_ENCODING_SPEC: Mapping[Language, LanguageEncodingSpec] = {
-    Language.ENGLISH: LanguageEncodingSpec(
+_ENCODING_SPECS: dict[tuple[Language, EncodingScheme], LanguageEncodingSpec] = {
+    (Language.ENGLISH, EncodingScheme.T9): LanguageEncodingSpec(
         language=Language.ENGLISH,
         character_set=ENGLISH_LOWERCASE_ALPHABET,
         char_to_key_map=ENGLISH_T9_MAP,
+    ),
+    (Language.ENGLISH, EncodingScheme.QWERTY): LanguageEncodingSpec(
+        language=Language.ENGLISH,
+        character_set=ENGLISH_LOWERCASE_ALPHABET,
+        char_to_key_map=ENGLISH_QWERTY_MAP,
     ),
 }
 
@@ -66,8 +71,8 @@ _ENCODING_SPEC: Mapping[Language, LanguageEncodingSpec] = {
 
 
 # Language encoding specs should be fetched via this function.
-def get_encoding_spec(language: Language) -> LanguageEncodingSpec:
+def get_encoding_spec(language: Language, scheme: EncodingScheme) -> LanguageEncodingSpec:
     try:
-        return _ENCODING_SPEC[language]
-    except KeyError as e:
-        raise EncodingError(f'No encoding spec defined for {language!r}') from e
+        return _ENCODING_SPECS[(language, scheme)]
+    except KeyError:
+        raise EncodingError(f'No encoding spec registered for language={language!r}, scheme={scheme!r}') from None

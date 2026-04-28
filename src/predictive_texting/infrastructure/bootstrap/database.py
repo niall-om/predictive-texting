@@ -4,7 +4,8 @@ import contextlib
 import sqlite3
 from pathlib import Path
 
-from ...exceptions.infrastructure import BootstrapError
+from predictive_texting.exceptions.infrastructure import BootstrapError
+
 from ..utils.acquire_lock import acquire_exclusive_lock_with_timeout
 from .db.schema_loader import load_schema_sql
 
@@ -21,7 +22,7 @@ def bootstrap_sqlite_database(db_path: Path) -> Path:
     if not _dir.is_dir():
         raise BootstrapError(f'Invalid db_path {db_path!r}; directory {_dir!r} is not a directory')
 
-    # load schema_sql 
+    # load schema_sql
     try:
         schema_sql = load_schema_sql()
     except (ValueError, OSError) as e:

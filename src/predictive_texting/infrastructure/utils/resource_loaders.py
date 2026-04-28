@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from importlib import resources
 
-from ...exceptions.infrastructure import BootstrapError
+from predictive_texting.exceptions.infrastructure import BootstrapError
+
 from ..bootstrap import db as db_pkg
 
 

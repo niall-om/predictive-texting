@@ -12,6 +12,7 @@ from predictive_texting.application.word_prediction.config import RankingPolicyT
 from predictive_texting.application.word_prediction.dtos import CandidateWord
 from predictive_texting.application.word_prediction.service import WordPredictionService
 from predictive_texting.domain.encoding.languages import Language
+from predictive_texting.domain.encoding.schemes import EncodingScheme
 from predictive_texting.domain.encoding.types import IndexKey
 from predictive_texting.exceptions.application import WordPredictionServiceError
 from predictive_texting.exceptions.domain import EncodingError
@@ -49,6 +50,7 @@ def _build_config() -> WordPredictionConfig:
     return WordPredictionConfig(
         db_path=data_dir / 'predictive_texting.sqlite3',
         language=Language.ENGLISH,
+        encoding_scheme=EncodingScheme.QWERTY,  # default to QWERTY encoding for Demo
         ranking_policy_type=RankingPolicyType.FREQUENCY,
         k=10,
     )
@@ -85,7 +87,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title='Predictive Text Service',
-    description='T9-style predictive text demo using FastAPI, SQLite, and a ranked completion index.',
+    description='Predictive text service supporting pluggable encoding schemes (T9, QWERTY) with in-memory indexing.',
     version='0.1.0',
     lifespan=lifespan,
 )
@@ -122,6 +124,22 @@ def health() -> HealthResponse:
 
 @app.get('/predict/keys', response_model=PredictionResponse)
 def predict_by_keys(keys: str, request: Request) -> PredictionResponse:
+    """
+    Predict candidate words from a sequence of index keys.
+
+    This endpoint operates on the encoded keyspace used internally by the system.
+    The meaning of each key depends on the configured encoding scheme.
+
+    - Under T9 encoding: keys are digits (e.g. "4663")
+    - Under QWERTY encoding: keys correspond to character positions (e.g. 1–26)
+
+    Example (T9):
+        keys = "4663" → ["home", "good", ...]
+
+    Example (QWERTY):
+        keys = "8,15" (or equivalent representation) → ["home", ...]
+    """
+
     service = _get_service(request)
 
     try:
@@ -145,6 +163,20 @@ def predict_by_keys(keys: str, request: Request) -> PredictionResponse:
 
 @app.get('/predict/text', response_model=PredictionResponse)
 def predict_by_text(text: str, request: Request) -> PredictionResponse:
+    """
+    Predict candidate words from text input using the configured encoding.
+
+    The input text is encoded into a sequence of index keys using the configured
+    encoding scheme (currently QWERTY for English). The service then returns
+    candidate words that match this encoded sequence.
+
+    Under QWERTY encoding, each character maps to a unique key, so this endpoint
+    behaves like standard prefix-based autocomplete.
+
+    Example:
+        text = "ho" → ["home", "house", ...]
+    """
+
     service = _get_service(request)
 
     try:
