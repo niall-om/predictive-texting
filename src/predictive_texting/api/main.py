@@ -14,14 +14,38 @@ from predictive_texting.application.word_prediction.service import WordPredictio
 from predictive_texting.domain.encoding.languages import Language
 from predictive_texting.domain.encoding.schemes import EncodingScheme
 from predictive_texting.domain.encoding.types import IndexKey
+from predictive_texting.domain.lexicon.types import WordId, WordSource
 from predictive_texting.exceptions.application import WordPredictionServiceError
 from predictive_texting.exceptions.domain import EncodingError
 from predictive_texting.exceptions.infrastructure import BootstrapError
 from predictive_texting.infrastructure.bootstrap.word_prediction import bootstrap_word_prediction_service
 
+
 # -----------------------------------------------------------------------------
-# Response Models
+# Request / Response Models
 # -----------------------------------------------------------------------------
+class AddWordRequest(BaseModel):
+    """
+    Request payload for creating a new word.
+
+    Represents user-provided input that will be validated, normalised,
+    and persisted by the word prediction service.
+    """
+
+    word: str
+
+
+class AddWordResponse(BaseModel):
+    """
+    Response payload returned after successfully adding a new word.
+
+    Includes the persisted word identifier and associated metadata.
+    """
+
+    word_id: int
+    word: str
+    frequency: int
+    source: str
 
 
 class CandidateResponse(BaseModel):
@@ -36,6 +60,17 @@ class PredictionResponse(BaseModel):
 
     query: str
     candidates: list[CandidateResponse]
+
+
+class RecordSelectionResponse(BaseModel):
+    """
+    Response payload for recording a word selection.
+
+    Confirms that the selection event has been processed and applied.
+    """
+
+    status: str
+    word_id: int
 
 
 class HealthResponse(BaseModel):
@@ -214,3 +249,52 @@ def predict_by_text(text: str, request: Request) -> PredictionResponse:
         query=text,
         candidates=_candidates_to_response(candidates),
     )
+
+
+@app.post('/words', response_model=AddWordResponse)
+def add_word(payload: AddWordRequest, request: Request) -> AddWordResponse:
+    """
+    Add a new user-provided word to the prediction system.
+
+    The service persists the word and synchronises the in-memory WordStore and
+    CompletionIndex so the word is immediately available for predictions.
+    """
+    service = _get_service(request)
+
+    try:
+        record = service.add_word(payload.word, source=WordSource.USER)
+
+    except (TypeError, ValueError, EncodingError) as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    except WordPredictionServiceError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+    return AddWordResponse(
+        word_id=record.word_id.value,
+        word=record.word,
+        frequency=record.frequency,
+        source=record.source,
+    )
+
+
+@app.post('/words/{word_id}/select', response_model=RecordSelectionResponse)
+def record_selection(word_id: int, request: Request) -> RecordSelectionResponse:
+    """
+    Record that a candidate word was selected by the user.
+
+    This increments the word frequency and refreshes the in-memory ranking data,
+    allowing repeated selections to influence future prediction ordering.
+    """
+    service = _get_service(request)
+
+    try:
+        service.record_selection(WordId(word_id))
+
+    except (TypeError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    except WordPredictionServiceError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+    return RecordSelectionResponse(status='ok', word_id=word_id)
