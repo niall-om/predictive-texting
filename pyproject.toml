@@ -62,6 +62,7 @@ only-include = [
     "src/predictive_texting",
     "pyproject.toml",
     "README.md",
+    "docs/screenshots",
 ]
 
 
