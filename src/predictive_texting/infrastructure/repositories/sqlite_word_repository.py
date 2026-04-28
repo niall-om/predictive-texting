@@ -37,33 +37,17 @@ class SqliteWordRepository(WordRepositoryProtocol):
       frequency) and validate them at the repository boundary.
     """
 
-    __slots__ = (
-        '_db_path',
-        '_conn',
-    )
+    __slots__ = ('_db_path',)
     _db_path: str
-    _conn: sqlite3.Connection | None
 
     def __init__(self, db_path: Path | str) -> None:
         """
-        Initialize the repository and open a SQLite connection.
+        Initialise the repository with a SQLite database path.
 
-        Raises:
-        - RepositoryError: If the database connection cannot be established.
+        Connections are opened per operation to keep usage thread-safe under FastAPI.
         """
         self._db_path = str(db_path)
-        self._conn = None
-        self._connect()
-
-    def close(self) -> None:
-        """
-        Close the underlying SQLite connection.
-
-        Safe to call multiple times.
-        """
-        if self._conn is not None:
-            self._conn.close()
-            self._conn = None
+        # no connection created here
 
     def add_word(self, new_word: NewWord) -> WordRecord:
         """
@@ -207,17 +191,17 @@ class SqliteWordRepository(WordRepositoryProtocol):
             WHERE DELETED_TS IS NULL
         """
 
-        conn = self._get_db_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute(sql)
-            return self._records_from_rows(cursor.fetchall())
+        with self._get_db_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(sql)
+                return self._records_from_rows(cursor.fetchall())
 
-        except sqlite3.Error as e:
-            raise RepositoryError('Error loading words from repository') from e
+            except sqlite3.Error as e:
+                raise RepositoryError('Error loading words from repository') from e
 
-        finally:
-            cursor.close()
+            finally:
+                cursor.close()
 
     def get_by_word(self, word: Word) -> WordRecord | None:
         """
@@ -252,16 +236,16 @@ class SqliteWordRepository(WordRepositoryProtocol):
         """
         params = {'WORD': normalised_word}
 
-        conn = self._get_db_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute(sql, params)
-            return self._record_from_row(cursor.fetchone())
+        with self._get_db_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(sql, params)
+                return self._record_from_row(cursor.fetchone())
 
-        except sqlite3.Error as e:
-            raise RepositoryError(f'Error retrieving word {word!r}') from e
-        finally:
-            cursor.close()
+            except sqlite3.Error as e:
+                raise RepositoryError(f'Error retrieving word {word!r}') from e
+            finally:
+                cursor.close()
 
     def get_by_id(self, word_id: WordId) -> WordRecord | None:
         """
@@ -286,16 +270,16 @@ class SqliteWordRepository(WordRepositoryProtocol):
         """
         params = {'WORD_ID': word_id.value}
 
-        conn = self._get_db_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute(sql, params)
-            return self._record_from_row(cursor.fetchone())
+        with self._get_db_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(sql, params)
+                return self._record_from_row(cursor.fetchone())
 
-        except sqlite3.Error as e:
-            raise RepositoryError(f'Error retrieving word_id {word_id.value!r}') from e
-        finally:
-            cursor.close()
+            except sqlite3.Error as e:
+                raise RepositoryError(f'Error retrieving word_id {word_id.value!r}') from e
+            finally:
+                cursor.close()
 
     def is_empty(self) -> bool:
         """
@@ -327,19 +311,22 @@ class SqliteWordRepository(WordRepositoryProtocol):
             WHERE DELETED_TS IS NULL
         """
 
-        conn = self._get_db_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute(sql)
-            row = cursor.fetchone()
-        except sqlite3.Error as e:
-            raise RepositoryError('Error retrieving word count') from e
-        finally:
-            cursor.close()
+        with self._get_db_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(sql)
+                row = cursor.fetchone()
+            except sqlite3.Error as e:
+                raise RepositoryError('Error retrieving word count') from e
+            finally:
+                cursor.close()
+
+        if row is None:
+            raise RepositoryError('Failed to retrieve word count')
 
         return int(row['WORD_COUNT'])
 
-    # additional method for runtime construction/datat seeding (not defined in interface protocol)
+    # additional method for runtime construction/data seeding
     def seed(self, words: Iterable[NewWord]) -> None:
         """
         Seed the repository with validated NewWord domain objects.
@@ -380,37 +367,23 @@ class SqliteWordRepository(WordRepositoryProtocol):
                 cursor.close()
 
     # ---------- Internal Helpers --------------
-    def _connect(self) -> None:
-        """
-        Establish the underlying SQLite connection if not already connected.
-
-        Raises:
-        - RepositoryError: If the database connection cannot be established.
-        """
-        if self._conn is None:
-            db_path = self._db_path
-            try:
-                self._conn = sqlite3.connect(database=db_path)
-                self._conn.row_factory = sqlite3.Row
-            except sqlite3.Error as e:
-                self._conn = None
-                raise RepositoryError(f'Error connecting to Database at {db_path!r}') from e
-
     def _get_db_connection(self) -> sqlite3.Connection:
         """
-        Return the active SQLite connection, reconnecting if needed.
+        Create and return a new SQLite connection.
 
-        Returns:
-        - sqlite3.Connection: Active database connection.
+        Each call returns a fresh connection to ensure thread safety when used
+        within FastAPI's threaded execution model.
 
         Raises:
         - RepositoryError: If a connection cannot be established.
         """
-        if self._conn is None:
-            self._connect()
 
-        assert self._conn is not None
-        return self._conn
+        try:
+            conn = sqlite3.connect(self._db_path, timeout=5)
+            conn.row_factory = sqlite3.Row
+            return conn
+        except sqlite3.Error as e:
+            raise RepositoryError(f'Error connecting to database at {self._db_path!r}') from e
 
     @staticmethod
     def _record_from_row(row: sqlite3.Row | None) -> WordRecord | None:
