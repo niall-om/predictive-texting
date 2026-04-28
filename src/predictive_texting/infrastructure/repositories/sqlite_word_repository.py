@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterable
 
 from ...application.word_prediction.interfaces import WordRepositoryProtocol
 from ...domain.lexicon.types import (
@@ -337,9 +338,44 @@ class SqliteWordRepository(WordRepositoryProtocol):
         return int(row['WORD_COUNT'])
 
     # additional method for runtime construction/datat seeding (not defined in interface protocol)
-    def seed(self) -> None:
-        # TODO: implement method
-        raise NotImplementedError()
+    def seed(self, words: Iterable[NewWord]) -> None:
+        """
+        Seed the repository with validated NewWord domain objects.
+
+        Existing words are ignored, making this operation idempotent for bootstrap use.
+
+        Raises:
+        - RepositoryError: If the seed operation fails.
+        """
+
+        sql = """
+            INSERT OR IGNORE INTO WORDS (WORD, FREQUENCY, SOURCE, CREATED_TS)
+            VALUES (:WORD, :FREQUENCY, :SOURCE, :CREATED_TS)
+        """
+
+        created_ts = now_utc_str()
+
+        params = [
+            {
+                'WORD': word.word,
+                'FREQUENCY': word.frequency,
+                'SOURCE': word.source,
+                'CREATED_TS': created_ts,
+            }
+            for word in words
+        ]
+
+        if not params:
+            return
+
+        with self._get_db_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.executemany(sql, params)
+            except sqlite3.Error as e:
+                raise RepositoryError('Error seeding word repository') from e
+            finally:
+                cursor.close()
 
     # ---------- Internal Helpers --------------
     def _connect(self) -> None:
