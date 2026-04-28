@@ -1,27 +1,29 @@
-# connect to DB
-# run schema SQL
-# create repository
-# if repo is empty seed repo
-# build encoder, store, completion index
-# build service
-# hydrate service
-# return service
-
 from __future__ import annotations
 
-from ...application.word_prediction.config import WordPredictionConfig
+from ...application.word_prediction.config import RankingPolicyType, WordPredictionConfig
 from ...application.word_prediction.service import WordPredictionService
 from ...domain.encoding.encoding_specs import get_encoding_spec
 from ...domain.encoding.key_encoder import KeyEncoder
 from ...domain.lexicon.completion_index import RankedCompletionIndex
 from ...domain.lexicon.types import NewWord, WordSource
 from ...domain.lexicon.word_store import InMemoryWordStore
+from ...domain.ranking.frequency_ranking import FrequencyRankingPolicy
+from ...domain.ranking.protocols import RankingPolicy
 from ...exceptions.application import WordPredictionConfigError, WordPredictionServiceError
 from ...exceptions.domain import EncodingError
 from ...exceptions.infrastructure import BootstrapError, RepositoryError
 from ...infrastructure.repositories.sqlite_word_repository import SqliteWordRepository
 from .database import bootstrap_sqlite_database
 from .db.seed_file_registry import load_seed_words
+
+
+def _build_ranking_policy(
+    ranking_policy_type: RankingPolicyType,
+    word_store: InMemoryWordStore,
+) -> RankingPolicy:
+    match ranking_policy_type:
+        case RankingPolicyType.FREQUENCY:
+            return FrequencyRankingPolicy(word_store)
 
 
 def bootstrap_word_prediction_service(config: WordPredictionConfig) -> WordPredictionService:
@@ -32,7 +34,7 @@ def bootstrap_word_prediction_service(config: WordPredictionConfig) -> WordPredi
     1. Ensures the SQLite database and schema exist.
     2. Creates the SQLite word repository.
     3. Seeds the repository if it is empty.
-    4. Builds the encoder, word store, completion index, and service.
+    4. Builds the encoder, word store, completion index, ranking policy, and service.
     5. Hydrates the service from persisted repository data.
 
     Args:
@@ -59,9 +61,11 @@ def bootstrap_word_prediction_service(config: WordPredictionConfig) -> WordPredi
 
         word_store = InMemoryWordStore()
 
+        ranking_policy = _build_ranking_policy(config.ranking_policy_type, word_store)
+
         completion_index = RankedCompletionIndex(
             keyspace=key_encoder.index_key_space,
-            ranking_policy=config.ranking_policy,
+            ranking_policy=ranking_policy,
             k=config.k,
         )
 

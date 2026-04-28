@@ -1,24 +1,28 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 
 from ...domain.encoding.languages import Language
-from ...domain.ranking.protocols import RankingPolicy
 from ...exceptions.application import WordPredictionConfigError
+
+
+class RankingPolicyType(str, Enum):
+    FREQUENCY = 'frequency'
 
 
 @dataclass(frozen=True, slots=True)
 class WordPredictionConfig:
     db_path: Path
     language: Language
-    ranking_policy: RankingPolicy
+    ranking_policy_type: RankingPolicyType
     k: int
 
     def __post_init__(self) -> None:
         self._validate_path()
         self._validate_language()
-        self._validate_ranking()
+        self._validate_ranking_policy_type()
         self._validate_k()
 
     def _validate_path(self) -> None:
@@ -38,10 +42,10 @@ class WordPredictionConfig:
         if not isinstance(self.language, Language):
             raise WordPredictionConfigError(f'Invalid language: {self.language!r}; expected a Language value')
 
-    def _validate_ranking(self) -> None:
-        if not isinstance(self.ranking_policy, RankingPolicy):
+    def _validate_ranking_policy_type(self) -> None:
+        if not isinstance(self.ranking_policy_type, RankingPolicyType):
             raise WordPredictionConfigError(
-                'Invalid ranking policy; expected an instance that implements the RankingPolicy protocol'
+                f'Invalid ranking policy type: {self.ranking_policy_type!r}; expected a RankingPolicyType value'
             )
 
     def _validate_k(self) -> None:
