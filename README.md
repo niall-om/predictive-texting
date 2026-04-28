@@ -2,6 +2,8 @@
 
 A backend service that provides fast word predictions based on user input, inspired by T9-style predictive text systems.
 
+This project demonstrates how to combine **persistent storage, in-memory data structures, and clean architecture** to build a fast, stateful backend system.
+
 This project is designed as a **learning exercise in software engineering, system design, and data structures**, with a focus on building a **stateful backend service** using clean architecture principles.
 
 ---
@@ -9,6 +11,9 @@ This project is designed as a **learning exercise in software engineering, syste
 ## 📚 Quick Links
 
 - [Features](#-features)
+- [Quick Start](#-quick-start)
+- [Interactive Demo UI](#interactive-demo-ui)
+- [API Demo Flow](#-api-demo-flow)
 - [Why this project is interesting](#-why-this-project-is-interesting)
 - [Architecture Overview](#-architecture-overview)
 - [How it works](#-how-it-works)
@@ -18,8 +23,6 @@ This project is designed as a **learning exercise in software engineering, syste
 - [Personalization](#-personalization)
 - [API Endpoints](#-api-endpoints)
 - [Concurrency Considerations](#-concurrency-considerations)
-- [Running the project](#-running-the-project)
-- [Demo Flow](#-demo-flow)
 - [Learning goals](#-learning-goals)
 - [Deployment Notes](#-deployment-notes)
 - [Possible extensions](#-possible-extensions)
@@ -31,11 +34,134 @@ This project is designed as a **learning exercise in software engineering, syste
 
 - Predict words from text input (autocomplete-style)
 - Predict words from encoded key sequences (T9-style or QWERTY)
-- Pluggable encoding schemes
-- In-memory completion index (Trie) for fast lookup
+- Pluggable encoding schemes (T9 and QWERTY)
+- In-memory completion index for fast lookup
 - SQLite-backed persistent word repository
 - Personalization via user selection tracking
 - Clean layered architecture (domain, application, infrastructure, API)
+
+---
+
+## ⚡ Quick Start
+
+### Install
+
+```
+python -m pip install -e ".[dev]"
+```
+
+### Run
+
+```
+uvicorn predictive_texting.api.main:app --reload
+```
+
+### Swagger UI
+
+```
+http://127.0.0.1:8000/docs
+```
+
+---
+
+## 🖥️ Interactive Demo UI
+
+<a id="interactive-demo-ui"></a>
+
+A lightweight browser-based demo is included to interact with the service in real time.
+
+### Access
+
+```
+http://127.0.0.1:8000/
+```
+
+---
+
+### Example
+
+#### Live prediction
+
+![Live prediction](docs/screenshots/prediction.png)
+
+#### After selecting a word
+
+![Selection feedback](docs/screenshots/selection.png)
+
+---
+
+### How to use
+
+1. Start typing in the text area  
+2. The system will:
+   - detect the current word at the cursor
+   - send it to `/predict/text`
+   - display ranked suggestions  
+
+3. Click a suggestion to:
+   - insert the word into the text  
+   - trigger a backend selection event (`POST /words/{word_id}/select`)  
+   - update frequency and ranking  
+
+---
+
+### What this demonstrates
+
+- Real-time prediction using an in-memory Trie index  
+- Stateless API calls over a stateful backend  
+- Personalization loop (frequency-based ranking updates)  
+- Separation of frontend (client-side state) and backend (prediction engine)  
+
+---
+
+### Notes
+
+- The UI is intentionally minimal and implemented with plain HTML + JavaScript  
+- Input is currently limited to lowercase alphabetic characters  
+- This UI is designed purely for demonstration purposes  
+
+---
+
+## 🧪 API Demo Flow
+
+Try the following sequence:
+
+1. Add a new word:
+
+```
+POST /words
+{
+  "word": "foobar"
+}
+```
+
+2. Predict:
+
+```
+GET /predict/text?text=foo
+```
+
+3. Record selection using the returned `word_id`:
+
+```
+POST /words/{word_id}/select
+```
+
+4. Retrieve the word:
+
+```
+GET /words/{word_id}
+```
+
+The response should show the updated frequency.
+
+5. Predict again:
+
+```
+GET /predict/text?text=foo
+```
+
+→ `foobar` should be present and improve in ranking over time.
 
 ---
 
@@ -60,22 +186,9 @@ Request:
 ### Key ideas explored:
 
 - **Stateful backend design**  
-  The service maintains an in-memory index across requests instead of recomputing on every call.
-
 - **Separation of concerns**  
-  Clear boundaries between:
-  - Domain logic
-  - Application orchestration
-  - Infrastructure (database, locking)
-  - API layer
-
-- **In-memory vs persistent storage**
-  - SQLite stores the source-of-truth data
-  - In-memory structures provide fast lookup performance
-
+- **In-memory vs persistent storage**  
 - **Bootstrapping and lifecycle management**
-  - Service is constructed once at startup
-  - FastAPI lifespan hook manages this cleanly
 
 ---
 
@@ -97,31 +210,17 @@ WordPredictionService (Application Layer)
 SQLite Repository (Persistence)
 ```
 
-### Key idea
-
-The system separates:
-
-- **Persistent state** → SQLite (source of truth)
-- **Runtime state** → in-memory structures for fast access
-
-This allows:
-- fast predictions
-- consistent updates
-- clear separation of responsibilities
-
 ---
 
 ## ⚙️ How it works
 
-### 1. Data flow
-
 At startup:
 
-1. Database is initialised (with file locking for safety)
-2. Repository is created and optionally seeded
-3. Words are loaded into memory
-4. A completion index (Trie) is built
-5. The service is hydrated and stored in app state
+1. Database is initialised  
+2. Repository is created  
+3. Words are loaded into memory  
+4. Trie index is built  
+5. Service is hydrated  
 
 ---
 
@@ -130,59 +229,34 @@ At startup:
 ```
 User Input ("he")
     ↓
-KeyEncoder (QWERTY)
+KeyEncoder
     ↓
-Encoded keys [8, 5]
+Encoded keys
     ↓
-CompletionIndex (Trie lookup)
+Trie lookup
     ↓
-Candidate Word IDs
+Candidate IDs
     ↓
 WordStore lookup
     ↓
-Response returned
+Response
 ```
 
 ---
 
 ## 🌳 Completion Index (Trie)
 
-The core data structure is a **Trie (prefix tree)** built over encoded key sequences.
+A Trie maps encoded key prefixes to candidate words.
 
-Example:
+Why it matters:
 
-```
-"home" → [8, 15, 13, 5]
-
-Prefixes:
-[8]
-[8,15]
-[8,15,13]
-[8,15,13,5]
-```
-
-Each prefix maps to candidate word IDs.
-
-### Why a Trie?
-
-- Avoids scanning the entire dataset per request
-- Enables efficient prefix lookup
-- Provides near O(1) retrieval for prefix queries (after preprocessing)
-- Supports incremental updates and ranking
-
-This is a key improvement over naïve approaches like:
-
-```
-for word in all_words:
-    if word.startswith(prefix):
-        ...
-```
+- avoids scanning all words  
+- fast prefix lookup  
+- supports incremental updates  
 
 ---
 
 ## 🔤 Encoding Schemes
-
-The system supports **pluggable encoding strategies**.
 
 ### T9 Encoding
 
@@ -192,10 +266,6 @@ o → 6
 → "ho" → 46
 ```
 
-Multiple characters share keys (compressed keyspace).
-
----
-
 ### QWERTY Encoding (default)
 
 ```
@@ -204,241 +274,91 @@ b → 2
 ...
 h → 8
 o → 15
-→ "ho" → [8, 15]
 ```
-
-- One-to-one mapping
-- Behaves like standard autocomplete
-
----
-
-### Design Insight
-
-Encoding is abstracted as:
-
-```
-(Language, EncodingScheme) → EncodingSpec
-```
-
-This allows new encoding strategies to be added without changing core logic.
 
 ---
 
 ## 🎯 Personalization
 
-The system supports dynamic learning based on user behavior.
-
-### Flow:
-
 ```
 User selects a word
     ↓
-POST /words/{word_id}/select
+Frequency increases
     ↓
-Frequency is incremented
+Index refreshes
     ↓
-Completion index is refreshed
-    ↓
-Future predictions are re-ranked
+Ranking improves
 ```
-
-This enables:
-
-- adaptive suggestions
-- frequency-based ranking
-- evolving predictions over time
 
 ---
 
 ## 🌐 API Endpoints
 
-### Prediction
+Prediction:
 
-- `GET /predict/text?text=...`
-- `GET /predict/keys?keys=...`
+- `GET /predict/text`
+- `GET /predict/keys`
 
----
-
-### Word Management
+Word management:
 
 - `POST /words`
-    - Add a new word
-
 - `GET /words/{word_id}`
-    - Retrieve word details (includes frequency and source)
-
 - `POST /words/{word_id}/select`
-    - Record a user selection (updates ranking)
 
 ---
 
 ## 🔒 Concurrency Considerations
 
-Database bootstrapping uses a file lock to prevent multiple processes from:
+- File locking prevents concurrent DB initialisation  
+- In-memory state is shared and mutable  
+- No locking currently → possible race conditions  
 
-- Creating the schema simultaneously
-- Corrupting the database
+Future improvements:
 
-Implemented using:
-
-```
-fcntl.flock + retry loop + timeout
-```
-
-This is included as a learning exercise in process-level coordination.
-
-
-### In-Memory State and Thread Safety
-
-The application maintains shared in-memory state via:
-
-- `WordStore`
-- `CompletionIndex`
-
-These structures are mutated during operations such as:
-
-- `POST /words` (adding new words)
-- `POST /words/{word_id}/select` (updating frequency and rankings)
-
-Since FastAPI executes requests in a thread pool, multiple requests may access and modify this shared state concurrently.
-
-### Current Behaviour
-
-At present, no explicit synchronization (e.g. locks) is used around these mutations.
-
-This means that in scenarios with concurrent writes, the system may be susceptible to:
-
-- race conditions
-- inconsistent intermediate states
-- lost updates
-
-For the purposes of this project, this trade-off is acceptable because:
-
-- the system is designed as a learning exercise
-- typical usage is low-concurrency (demo environment)
-- the architecture prioritizes clarity over completeness
-
-### Possible Improvements
-
-In a production setting, several approaches could be used:
-
-- Introduce a service-level lock (e.g. `threading.Lock`) around mutation operations
-- Use a single-threaded worker model for state mutation
-- Move to a process-safe or distributed state store
-- Adopt an event-driven or queue-based update model
-
-These approaches would ensure consistency while maintaining the performance benefits of the in-memory index.
-
-
----
-
-## 📦 Running the project
-
-### Install
-
-```
-python -m pip install -e ".[dev]"
-```
-
-### Run
-
-```
-uvicorn predictive_texting.api.main:app --reload
-```
-
-### Swagger UI
-
-```
-http://127.0.0.1:8000/docs
-```
-
----
-
-## 🧪 Demo Flow
-
-Try the following sequence:
-
-1. Add a new word:
-
-    POST /words
-    {
-        "word": "foobar"
-    }
-
-2. Predict:
-
-    GET /predict/text?text=foo
-
-3. Record selection using the returned `word_id`:
-
-    POST /words/{word_id}/select
-
-4. Retrieve the word:
-
-    GET /words/{word_id}
-
-    The response should show the updated frequency.
-
-5. Predict again:
-
-    GET /predict/text?text=foo
-
-→ `foobar` should be present in the results, and repeated selections should increase its frequency and improve its ranking over time.
+- locks  
+- worker model  
+- distributed state  
 
 ---
 
 ## 📚 Learning goals
 
-This project was built to explore:
-
-- Designing stateful backend services
-- Using in-memory data structures alongside databases
-- Applying clean architecture principles
-- Implementing Trie-based indexing
-- Understanding encoding abstractions
-- Managing application lifecycle in FastAPI
-- Handling concurrency during bootstrapping
+- Stateful backend design  
+- Trie data structures  
+- Clean architecture  
+- Encoding abstraction  
+- FastAPI lifecycle  
 
 ---
 
 ## 🚧 Deployment Notes
 
-This project uses SQLite for simplicity.
+SQLite may not persist on platforms like Render.
 
-On platforms like Render or similar container-based environments:
-
-- The database file may not persist across restarts
-- Data may be lost on redeploy
-
-For production use, a persistent database (e.g. PostgreSQL) would be required.
+Use PostgreSQL for production.
 
 ---
 
 ## 🔮 Possible extensions
 
-- Add new encoding schemes (multi-language support)
-- Improve ranking (recency, personalization, ML-based scoring)
-- Add UI for interactive demo
-- Introduce async database layer
-- Scale to multi-worker or distributed setup
-- Add caching layers
+- multi-language support  
+- ML-based ranking  
+- async DB  
+- distributed system  
 
 ---
 
 ## ⚠️ Notes
 
-- This is a learning/portfolio project, not production-ready
-- Some design choices are intentionally simple
-- Focus is on clarity, correctness, and design thinking
+- Learning project  
+- Not production-ready  
+- Focus on design clarity  
 
 ---
 
 ## 💡 Summary
 
-This project demonstrates:
-
-- Moving beyond CRUD APIs into stateful system design
-- Clean separation between domain, application, and infrastructure
-- Use of data structures (Trie) for real performance gains
-- Designing extensible, pluggable systems
-- Implementing adaptive, personalized backend behaviour
+- Stateful backend system  
+- Clean architecture  
+- Trie-based performance  
+- Adaptive, personalized predictions  
