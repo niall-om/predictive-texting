@@ -1,3 +1,5 @@
+![Status](https://img.shields.io/badge/status-live-green)
+
 # Predictive Text Service
 
 A backend service that provides fast word predictions based on user input, inspired by T9-style predictive text systems.
@@ -8,8 +10,19 @@ This project is designed as a **learning exercise in software engineering, syste
 
 ---
 
-## 📚 Quick Links
+## 🌍 Live Demo
 
+- [Interactive Demo UI](https://predictive-texting.onrender.com/)
+- [API Docs (Swagger)](https://predictive-texting.onrender.com/docs)
+- [Health Check](https://predictive-texting.onrender.com/health)
+
+> Note: The service is deployed on Render’s free tier and may take a few seconds to wake up after inactivity.
+
+
+---
+
+## 📚 Quick Links
+- [Live Demo](#-live-demo)
 - [Features](#-features)
 - [Quick Start](#-quick-start)
 - [Interactive Demo UI](#interactive-demo-ui)
@@ -72,9 +85,16 @@ A lightweight browser-based demo is included to interact with the service in rea
 
 ### Access
 
+Local:
 ```
 http://127.0.0.1:8000/
 ```
+
+Deployed:
+```
+https://predictive-texting.onrender.com/
+```
+
 
 ---
 
@@ -333,9 +353,18 @@ Future improvements:
 
 ## 🚧 Deployment Notes
 
-SQLite may not persist on platforms like Render.
+This project uses SQLite for simplicity.
 
-Use PostgreSQL for production.
+On platforms like Render:
+- The filesystem may be ephemeral
+- The database may reset on restart
+- The service may enter a "sleep" state after inactivity (free tier)
+
+As a result:
+- The first request after inactivity may take a few seconds (cold start)
+- Data persistence is not guaranteed between restarts
+
+In production, a managed database such as PostgreSQL should be used.
 
 ---
 
